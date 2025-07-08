@@ -334,6 +334,7 @@ func getDefaultUserSetting() *v1pb.UserSetting {
 		Locale:         "en",
 		Appearance:     "system",
 		MemoVisibility: "PRIVATE",
+		Theme:          "default",
 	}
 }
 
@@ -370,9 +371,24 @@ func (s *APIV1Service) GetUserSetting(ctx context.Context, request *v1pb.GetUser
 				userSettingMessage.Locale = general.Locale
 				userSettingMessage.Appearance = general.Appearance
 				userSettingMessage.MemoVisibility = general.MemoVisibility
+				userSettingMessage.Theme = general.Theme
 			}
 		}
 	}
+
+	// Backfill theme if empty: use workspace theme or default to "default"
+	if userSettingMessage.Theme == "" {
+		workspaceGeneralSetting, err := s.Store.GetWorkspaceGeneralSetting(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get workspace general setting: %v", err)
+		}
+		workspaceTheme := workspaceGeneralSetting.Theme
+		if workspaceTheme == "" {
+			workspaceTheme = "default"
+		}
+		userSettingMessage.Theme = workspaceTheme
+	}
+
 	return userSettingMessage, nil
 }
 
@@ -411,6 +427,7 @@ func (s *APIV1Service) UpdateUserSetting(ctx context.Context, request *v1pb.Upda
 		Locale:         "en",
 		Appearance:     "system",
 		MemoVisibility: "PRIVATE",
+		Theme:          "default",
 	}
 
 	// If there's an existing setting, use its values as defaults
@@ -419,6 +436,7 @@ func (s *APIV1Service) UpdateUserSetting(ctx context.Context, request *v1pb.Upda
 		generalSetting.Locale = existing.Locale
 		generalSetting.Appearance = existing.Appearance
 		generalSetting.MemoVisibility = existing.MemoVisibility
+		generalSetting.Theme = existing.Theme
 	}
 
 	// Apply updates based on the update mask
@@ -430,6 +448,8 @@ func (s *APIV1Service) UpdateUserSetting(ctx context.Context, request *v1pb.Upda
 			generalSetting.Appearance = request.Setting.Appearance
 		case "memo_visibility":
 			generalSetting.MemoVisibility = request.Setting.MemoVisibility
+		case "theme":
+			generalSetting.Theme = request.Setting.Theme
 		default:
 			return nil, status.Errorf(codes.InvalidArgument, "invalid update path: %s", field)
 		}
